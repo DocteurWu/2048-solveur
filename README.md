@@ -298,6 +298,18 @@ python3 bridge_api.py --budget-scale 0.4    # budgets adaptés à la carte (A55)
 python3 bridge_api.py --new --dry 10 -v     # nouvelle partie, 10 coups, détaillé
 ```
 
+En service (recommande) : `2048-bridge.service` relance le client apres une
+coupure reseau ou un reboot, et journalise dans `runs/bridge.log`.
+
+```bash
+sudo cp 2048-bridge.service /etc/systemd/system/ && sudo systemctl daemon-reload
+sudo systemctl enable --now 2048-bridge
+journalctl -u 2048-bridge -f ; tail -f runs/bridge.log
+```
+
+Le service tourne en `User=dietpi` pour lire `~/.hermes/credentials/rezal.env`
+(en root, `~` pointe sur `/root`).
+
 Identifiants : `--user`/`--password`, `REZAL_USER`/`REZAL_PASS`, ou
 `~/.hermes/credentials/rezal.env`.
 

@@ -1,0 +1,21 @@
+[Unit]
+Description=Pont API 2048 - joueur automatique du portail des Mineurs
+After=network-online.target 2048-solver.service
+Wants=network-online.target
+# Pas de limite de redemarrage : une coupure reseau ne doit pas arreter la partie.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/2048-solver
+User=dietpi
+Group=dietpi
+# Identifiants : ~/.hermes/credentials/rezal.env du compte dietpi (REZAL_USER/REZAL_PASS)
+ExecStart=/usr/bin/python3 /opt/2048-solver/bridge_api.py --games 50 --budget-scale 0.4
+Restart=always
+RestartSec=20
+StandardOutput=append:/opt/2048-solver/runs/bridge.log
+StandardError=append:/opt/2048-solver/runs/bridge.log
+
+[Install]
+WantedBy=multi-user.target

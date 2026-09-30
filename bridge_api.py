@@ -122,22 +122,41 @@ def verifie(avant, move, apres):
 
 # ------------------------------------------------------------------- clients
 class Portail:
-    def __init__(self, timeout=30):
+    def __init__(self, timeout=30, retries=12):
         self.jar = http.cookiejar.CookieJar()
         self.opener = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(self.jar))
         self.timeout = timeout
+        self.retries = retries
 
     def _call(self, method, path, payload=None, base=PORTAL):
+        """Appel API, avec nouvelles tentatives tant que le reseau est coupe.
+
+        Une coupure wifi d'une minute ne doit pas tuer la partie : on retente
+        avec un backoff progressif (2, 4, 8... 30 s max).
+        """
         data = json.dumps(payload).encode() if payload is not None else None
-        req = urllib.request.Request(base + path, data=data, method=method,
-                                     headers={"Content-Type": "application/json"})
-        try:
-            with self.opener.open(req, timeout=self.timeout) as r:
-                body = r.read().decode()
-        except urllib.error.HTTPError as e:
-            raise RuntimeError("%s %s -> HTTP %s %s" % (method, path, e.code, e.read().decode()[:200]))
-        return json.loads(body) if body.strip() else {}
+        derniere = None
+        for essai in range(self.retries):
+            req = urllib.request.Request(base + path, data=data, method=method,
+                                         headers={"Content-Type": "application/json"})
+            try:
+                with self.opener.open(req, timeout=self.timeout) as r:
+                    body = r.read().decode()
+                return json.loads(body) if body.strip() else {}
+            except urllib.error.HTTPError as e:
+                detail = e.read().decode()[:200]
+                if 500 <= e.code < 600 and essai < self.retries - 1:
+                    derniere = "HTTP %s %s" % (e.code, detail)
+                else:
+                    raise RuntimeError("%s %s -> HTTP %s %s" % (method, path, e.code, detail))
+            except (urllib.error.URLError, OSError) as e:
+                derniere = str(getattr(e, "reason", e))
+            attente = min(30, 2 ** (essai + 1))
+            log("portail injoignable (%s), nouvel essai dans %d s [%d/%d]"
+                % (derniere, attente, essai + 1, self.retries))
+            time.sleep(attente)
+        raise RuntimeError("%s %s -> portail injoignable (%s)" % (method, path, derniere))
 
     def login(self, user, password):
         res = self._call("POST", "/login/connexion", {"username": user, "password": password})
