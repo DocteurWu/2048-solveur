@@ -311,9 +311,20 @@ chevaucher deux requêtes (le serveur traite séquentiellement).
   `--threads 1` par jeu (comparaison appariée propre).
 - Agrège → `tuning_summary.txt` (classement) + `tuning_results.csv`.
 
-Historique dans `tuning_summary.txt` : **Round 1** (ancien moteur) → les
-poids `base` actuels (120/45/55/22/20/380) battent toutes les variations
-testées ; **Round 2** (moteur sticky) confirme.
+Historique (détail dans `tuning_summary.txt`, données brutes
+`tuning_results_r1.csv` / `tuning_results_r2.csv`) :
+
+- **Round 1** (ancien moteur, 200 ms) : `base` 1ᵉʳ (avg tile 3072) devant
+  mono75, corner600, empty160… toutes les hausses testées ont perdu.
+- **Round 2** (moteur sticky, 400 ms, threads=1) : **`base` et `snake12`
+  égalité** (avg tile 3072 ; avg score 53 269 vs 53 270 = bruit), puis
+  mono45 (2560), mono75/corner600 (2304), corner250 (2048), empty160
+  (1792), empty90 (1408).
+
+**Conclusion : les poids par défaut (120/45/55/22/20/380) sont conservés** —
+ils gagnent ou égalent tout sur deux rounds et deux moteurs ; baisser snake
+20→12 ne change rien (bruit). Le tuner reprend là où il s'est arrêté si la
+machine redémarre (CSV déjà rempli = jeux sautés).
 
 ## 7. Recette agent IA — démarrage de A à Z
 

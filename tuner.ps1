@@ -37,7 +37,15 @@ $configs = @(
     @{ n = 'snake12'; d = @('CFG_W_SNAKE=12.0') }
 )
 
-Set-Content -Path $results -Value 'config,seed,score,max_tile,moves'
+# Reprend si un CSV existe deja (les lignes = jeux termines uniquement) :
+# une coupure/reboot ne perd plus les resultats en cours.
+$done = @{}
+if (Test-Path $results) {
+    foreach ($r in (Import-Csv $results)) { $done["$($r.config)|$($r.seed)"] = $true }
+    Log "reprise: $($done.Count) jeu(x) deja enregistre(s)"
+} else {
+    Set-Content -Path $results -Value 'config,seed,score,max_tile,moves'
+}
 
 Log 'compilation des variantes...'
 foreach ($c in $configs) {
@@ -51,8 +59,14 @@ foreach ($c in $configs) {
 }
 
 $jobs = @()
-foreach ($c in $configs) { foreach ($s in $seeds) { $jobs += @{ n = $c.n; s = $s } } }
-Log "total jobs: $($jobs.Count)"
+foreach ($c in $configs) { foreach ($s in $seeds) {
+    if ($done.ContainsKey("$($c.n)|$($s)")) { continue }
+    $jobs += @{ n = $c.n; s = $s }
+} }
+Log "total jobs restants: $($jobs.Count)"
+if ($jobs.Count -eq 0) {
+    Log 'tous les jeux sont deja faits, agregation directe'
+}
 
 function Parse-Result([string]$cfg, [string]$logPath, $seed) {
     if (-not (Test-Path $logPath)) { Log "  LOG MANQUANT $cfg/$seed"; return }
