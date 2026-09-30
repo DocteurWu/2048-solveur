@@ -3,6 +3,7 @@ Description=Solveur 2048 - expectimax local (port 8766)
 After=network.target
 
 [Service]
+CPUWeight=500
 Type=simple
 # Adapter le chemin si le projet est ailleurs que /opt/2048-solver
 WorkingDirectory=/opt/2048-solver

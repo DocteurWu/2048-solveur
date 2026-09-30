@@ -191,20 +191,46 @@ def load_credentials():
 
 
 class Moteur:
-    """Le serveur C++ local (--serve)."""
+    """Moteurs de recherche : le premier joignable gagne.
 
-    def __init__(self, url):
-        self.url = url
+    Les URLs sont ordonnees par preference, ex. --solver
+    http://PC:8766/solve,http://127.0.0.1:8766/solve : le PC (rapide) d'abord,
+    la carte en secours si le PC dort ou quitte le reseau.
+    """
 
-    def solve(self, cells, ms, depth=None):
+    def __init__(self, urls):
+        if isinstance(urls, str):
+            urls = [u.strip() for u in urls.split(",") if u.strip()]
+        self.urls = urls
+        self.quarantaine = {}
+
+    def _post(self, url, cells, ms, depth):
         payload = {"cells": cells, "ms": ms}
         if depth:
             payload["depth"] = depth
-        req = urllib.request.Request(self.url, data=json.dumps(payload).encode(),
+        req = urllib.request.Request(url, data=json.dumps(payload).encode(),
                                      method="POST",
                                      headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=ms / 1000.0 + 60) as r:
             return json.loads(r.read().decode())
+
+    def solve(self, cells, ms, depth=None):
+        derniere = None
+        for url in self.urls:
+            if self.quarantaine.get(url) and time.time() - self.quarantaine[url] < 60:
+                continue
+            try:
+                rep = self._post(url, cells, ms, depth)
+                if url != self.urls[0]:
+                    log("recherche sur le moteur de secours %s" % url)
+                self.quarantaine.pop(url, None)
+                return rep
+            except Exception as e:
+                derniere = e
+                if url == self.urls[0] and len(self.urls) > 1:
+                    log("moteur principal injoignable (%s), bascule sur le secours" % e)
+                self.quarantaine[url] = time.time()
+        raise RuntimeError("aucun moteur joignable (%s)" % derniere)
 
 
 # --------------------------------------------------------------------- partie
@@ -304,7 +330,8 @@ class Partie:
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description="Joue le 2048 du portail avec le moteur local")
-    ap.add_argument("--solver", default="http://127.0.0.1:8766/solve", help="URL du serveur solveur")
+    ap.add_argument("--solver", default="http://127.0.0.1:8766/solve",
+                    help="URL(s) de moteur, separees par des virgules : le premier joignable gagne")
     ap.add_argument("--games", type=int, default=1)
     ap.add_argument("--new", action="store_true", help="forcer une nouvelle partie")
     ap.add_argument("--dry", type=int, metavar="N", help="s'arreter apres N coups")

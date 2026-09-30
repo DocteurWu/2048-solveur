@@ -6,6 +6,7 @@ Wants=network-online.target
 StartLimitIntervalSec=0
 
 [Service]
+CPUWeight=200
 Type=simple
 WorkingDirectory=/opt/2048-solver
 User=dietpi
