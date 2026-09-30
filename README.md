@@ -279,7 +279,43 @@ des onglets en arrière-plan.
 Ouvrir la console sur la page du jeu, coller le contenu de `console-bot.js`
 (même logique, `SERVER` en tête de fichier à adapter). **S** pour stopper.
 
-### Option C — agent IA externe (pilotage complet)
+### Option C — client API sans navigateur (`bridge_api.py`)
+
+Le userscript dépend du DOM et d'un navigateur connecté au portail. Le client
+`bridge_api.py` fait la même chose **en parlant directement à l'API du
+portail**, ce qui évite complètement le navigateur :
+
+```
+GET /api/jeux/partie/2048 ──plateau+score──▶ POST 127.0.0.1:8766/solve
+        ▲                                            │ move
+        └──── PUT /api/jeux/partie/2048 {coup,score} ◀┘
+```
+
+```bash
+python3 bridge_api.py                       # reprend la partie en cours
+python3 bridge_api.py --games 3             # enchaîne 3 parties
+python3 bridge_api.py --budget-scale 0.4    # budgets adaptés à la carte (A55)
+python3 bridge_api.py --new --dry 10 -v     # nouvelle partie, 10 coups, détaillé
+```
+
+Identifiants : `--user`/`--password`, `REZAL_USER`/`REZAL_PASS`, ou
+`~/.hermes/credentials/rezal.env`.
+
+Ce que le client reprend du userscript : budgets `budgetFor` (mis à l'échelle
+par `--budget-scale`), jitter entre les coups, early-abandon
+(200/256, 600/1024, 1200/2048), auto-restart après Game Over, et l'arrêt après
+8 erreurs consécutives.
+
+Ce qu'il ajoute : **vérification de synchronisation à chaque coup** — le
+plateau renvoyé par le portail doit être exactement la prévision locale
+(glissement calculé en Python) augmentée d'une seule tuile 2 ou 4, et le score
+doit valoir `score_courant + gain`. Toute divergence est signalée.
+
+⚠️ Le score envoyé au portail est un **jeton de synchronisation** : il doit
+valoir exactement le score courant renvoyé par le serveur (un score fantaisiste
+fait refuser le coup).
+
+### Option D — agent IA externe (pilotage complet)
 
 Un agent qui a accès au navigateur (CDP/Playwright/type de script) peut tout
 faire lui-même sans userscript :
@@ -371,6 +407,7 @@ scripts en CRLF (le `.gitattributes` force LF pour `*.sh`).
 | `lancer_serveur.sh` / `2048-solver.service` | lancement Manuel / systemd (port 8766) |
 | `exemple_requete.sh` / `test_serve.sh` | tests API |
 | `solver2048.user.js` | clients navigateur (budgets, restart, abandon, HUD) |
+| `bridge_api.py` | client API sans navigateur (pilotage direct du portail) |
 | `console-bot.js` | fallback DevTools |
 | `lancer_serveur.bat` | serveur Windows |
 | `tuner.ps1` + `tuning_summary.txt`, `tuning_results_r1.csv` | campagnes de poids |
