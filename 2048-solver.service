@@ -1,0 +1,19 @@
+[Unit]
+Description=Solveur 2048 - expectimax local (port 8766)
+After=network.target
+
+[Service]
+Type=simple
+# Adapter le chemin si le projet est ailleurs que /opt/2048-solver
+WorkingDirectory=/opt/2048-solver
+ExecStart=/opt/2048-solver/lancer_serveur.sh
+Restart=always
+RestartSec=3
+Environment=PORT=8766
+Environment=MS=5000
+Environment=THREADS=4
+# Limites optionnelles :
+# MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target

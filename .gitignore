@@ -1,0 +1,15 @@
+# binaires locaux
+solver2048
+solver2048-linux
+*.exe
+tune/
+
+# logs et fichiers de test temporaires
+*.log
+*.err
+solve.json
+bisect.json
+validate.*
+
+# CSV en cours de campagne (les résultats finaux sont versionnés)
+tuning_results.csv
