@@ -55,9 +55,10 @@ réseau local) ; le navigateur ne fait que des allers-retours JSON.
 
   | e | ≥9 | ≤8 | ≤6 | ≤4 | ≤2 | ≤1 |
   |---|---|---|---|---|---|---|
-  | prof. max | 5 | 6 | 7 | 8 | 9 | 10 |
+   | prof. max | 7 | 8 | 9 | 10 | 11 | 12 |
 
-  (plafond global `--depth 11` par défaut).
+  (plafond global `--depth 13` par défaut ; le vrai garde-fou est le budget
+  temps — seul le dernier niveau **complet** est retourné).
 - **Pool de workers *sticky*** : les 4 threads de recherche évaluent **toujours
   les mêmes directions racine** (`worker wid` → directions `wid, wid+4…`).
   Chaque direction reste donc sur **une seule TT** d'un niveau à l'autre et
@@ -126,7 +127,7 @@ Prérequis : `g++` (≥ 10, C++20 : `std::popcount`, `std::countr_zero`,
 ```bash
 git clone https://github.com/DocteurWu/2048-solveur.git
 cd 2048-solveur
-./build.sh        # = g++ -O3 -march=native -std=c++20 -pthread -Wall -Wextra main.cpp -o solver2048
+ ./build.sh        # = g++ -O3 -march=native -flto -std=c++20 -pthread -Wall -Wextra main.cpp -o solver2048
                   # + ./solver2048 --selftest   (doit dire OK)
 ```
 
@@ -167,7 +168,7 @@ interfaces) — c'est voulu pour le LAN.
 
 ```powershell
 # MinGW-w64 (exemple WinLibs via winget) puis :
-g++ -O3 -march=native -std=c++20 -Wall -Wextra main.cpp -o solver2048.exe
+g++ -O3 -march=native -flto -std=c++20 -Wall -Wextra main.cpp -o solver2048.exe
 
 .\solver2048.exe --selftest     # vérif
 .\solver2048.exe --bench        # NPS
@@ -190,7 +191,7 @@ g++ -O3 -march=native -std=c++20 -Wall -Wextra main.cpp -o solver2048.exe
 | `--bench` | NPS sur 4 plateaux types |
 | `--serve [--port N]` | serveur HTTP (GET `/health`, POST `/solve`) |
 | `--ms N` | budget par coup (défaut 150 ; serveur scripts : 5000) |
-| `--depth N` | plafond de profondeur (défaut 11) |
+ | `--depth N` | plafond de profondeur (défaut 13) |
 | `--threads N` | threads de recherche (défaut auto = min(4, cœurs)) |
 | `--verbose` | plateau à chaque coup en mode `--play` |
 
@@ -205,7 +206,7 @@ Requête :
 ```json
 {"cells": [4,2,0,0, 0,2,0,0, 0,0,0,0, 0,0,0,0],
  "ms": 5000,
- "depth": 11}
+  "depth": 13}
 ```
 
 - `cells` : **obligatoire**. 16 entiers, **ligne par ligne (row-major)**,
@@ -359,6 +360,46 @@ Internet (LAN uniquement), **ne pas** lancer deux instances (port déjà
 utilisé → `systemctl restart 2048-solver`), et **ne pas** modifier les
 scripts en CRLF (le `.gitattributes` force LF pour `*.sh`).
 
+### 7.1 Checklist agent — valider une optimisation du moteur
+
+Toute modification de `main.cpp` qui touche la recherche ou l'évaluation
+doit passer cette grille **dans l'ordre** :
+
+```bash
+# 1. selftest (LUT + eval bit-exact + TT) — MUST "SELFTEST: OK"
+./solver2048 --selftest
+
+# 2. bench déterministe — les NŒUDS doivent rester identiques :
+#    t4 = 2080768, t1 = 1835008. Un écart = l'évaluation a bougé → STOP.
+./solver2048 --bench --threads 4 --ms 5000
+
+# 3. A/B apparié (si la recherche/heuristique change) — MÊMES conditions
+#    des deux côtés, 4 jeux en parallèle, ~15 min :
+ancien binaire : cmd /c "git show HEAD:main.cpp > old_main.cpp"   # PAS de > PowerShell (UTF-16 !)
+                  g++ -O3 -march=native -std=c++20 old_main.cpp -o solver_old.exe
+nouveau binaire : g++ -O3 -march=native -flto -std=c++20 main.cpp -o solver2048.exe
+les 2 : --play --seed S --ms 400 --threads 1   pour S ∈ {2048, 99991, 777001, 424242}
+comparer le "Score :" final des 4 logs ; garder seulement si total ≥ baseline.
+
+# 4. rebuild du serveur : tuer l'ancien process, recompiler (sinon
+#    "Permission denied"), relancer, curl /health → {"ok":true}
+
+# 5. commit + push
+```
+
+Pièges déjà rencontrés (ne pas retomber) :
+
+- **PowerShell `>` ré-encode en UTF-16** → un `main.cpp` corrompu
+  (`'i' does not name a type` en pagaille). Toujours `cmd /c "git show … > f"`.
+- **`solver2048.exe` verrouillé** tant que le serveur tourne → tuer le
+  process avant de relancer `g++`.
+- **Comparaison à un ancien run isolé** : fausse — l'arrêt au budget dépend
+  de l'horloge (charge CPU), 2 runs d'un même binaire donnent des parties
+  différentes. Seul le A/B apparié (ancien vs nouveau, même session) prouve
+  quelque chose.
+- **`-flto`** est dans tous les builds (gain ~+5 % NPS vérifié en A/B
+  intercalé ; inutile de le retirer, inutile de le « retrouver »).
+
 ## 8. Dépannage
 
 | Symptôme | Cause / solution |
@@ -384,5 +425,5 @@ scripts en CRLF (le `.gitattributes` force LF pour `*.sh`).
 | `solver2048.user.js` | clients navigateur (budgets, restart, abandon, HUD) |
 | `console-bot.js` | fallback DevTools |
 | `lancer_serveur.bat` | serveur Windows |
-| `tuner.ps1` + `tuning_summary.txt`, `tuning_results_r1.csv` | campagnes de poids |
+| `tuner.ps1` + `tuning_summary.txt`, `tuning_results_r1.csv`, `tuning_results_r2.csv` | campagnes de poids |
 | `.gitignore` / `.gitattributes` | hors binaires ; LF imposé pour les `*.sh` |

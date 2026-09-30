@@ -52,7 +52,7 @@ foreach ($c in $configs) {
     $exe = Join-Path $tune "$($c.n).exe"
     $defs = @()
     foreach ($kv in $c.d) { $defs += "-D$kv" }
-    $args = @('-O3', '-march=native', '-std=c++20') + $defs + @((Join-Path $dir 'main.cpp'), '-o', $exe)
+    $args = @('-O3', '-march=native', '-flto', '-std=c++20') + $defs + @((Join-Path $dir 'main.cpp'), '-o', $exe)
     & $gpp @args
     if ($LASTEXITCODE -ne 0) { throw "compilation KO: $($c.n)" }
     Log "  compile ok: $($c.n)"
