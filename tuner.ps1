@@ -37,22 +37,36 @@ $configs = @(
     @{ n = 'snake12'; d = @('CFG_W_SNAKE=12.0') }
 )
 
-Set-Content -Path $results -Value 'config,seed,score,max_tile,moves'
+# Reprend si un CSV existe deja (les lignes = jeux termines uniquement) :
+# une coupure/reboot ne perd plus les resultats en cours.
+$done = @{}
+if (Test-Path $results) {
+    foreach ($r in (Import-Csv $results)) { $done["$($r.config)|$($r.seed)"] = $true }
+    Log "reprise: $($done.Count) jeu(x) deja enregistre(s)"
+} else {
+    Set-Content -Path $results -Value 'config,seed,score,max_tile,moves'
+}
 
 Log 'compilation des variantes...'
 foreach ($c in $configs) {
     $exe = Join-Path $tune "$($c.n).exe"
     $defs = @()
     foreach ($kv in $c.d) { $defs += "-D$kv" }
-    $args = @('-O3', '-march=native', '-std=c++20') + $defs + @((Join-Path $dir 'main.cpp'), '-o', $exe)
+    $args = @('-O3', '-march=native', '-flto', '-std=c++20') + $defs + @((Join-Path $dir 'main.cpp'), '-o', $exe)
     & $gpp @args
     if ($LASTEXITCODE -ne 0) { throw "compilation KO: $($c.n)" }
     Log "  compile ok: $($c.n)"
 }
 
 $jobs = @()
-foreach ($c in $configs) { foreach ($s in $seeds) { $jobs += @{ n = $c.n; s = $s } } }
-Log "total jobs: $($jobs.Count)"
+foreach ($c in $configs) { foreach ($s in $seeds) {
+    if ($done.ContainsKey("$($c.n)|$($s)")) { continue }
+    $jobs += @{ n = $c.n; s = $s }
+} }
+Log "total jobs restants: $($jobs.Count)"
+if ($jobs.Count -eq 0) {
+    Log 'tous les jeux sont deja faits, agregation directe'
+}
 
 function Parse-Result([string]$cfg, [string]$logPath, $seed) {
     if (-not (Test-Path $logPath)) { Log "  LOG MANQUANT $cfg/$seed"; return }

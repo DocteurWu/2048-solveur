@@ -603,13 +603,17 @@ static RootRes solve(Board b, int max_depth, double max_ms, uint64_t node_limit)
 }
 
 static int policy_depth(Board b, int cap) {
+    // Table remontee de +2 : le vrai garde-fou est le BUDGET TEMPS (arret au
+    // dernier niveau complet). L'ancien plafond gaspillait le budget restant
+    // sur les plateaux bon marche (ex. e=9 : L5 fini en ~0,25 s, niveaux
+    // 6-7 jamais tentes).
     int e = empties_count(b);
-    int d = 5;
-    if (e <= 8) d = 6;
-    if (e <= 6) d = 7;
-    if (e <= 4) d = 8;
-    if (e <= 2) d = 9;
-    if (e <= 1) d = 10;
+    int d = 7;
+    if (e <= 8) d = 8;
+    if (e <= 6) d = 9;
+    if (e <= 4) d = 10;
+    if (e <= 2) d = 11;
+    if (e <= 1) d = 12;
     return d < cap ? d : cap;
 }
 
@@ -1215,7 +1219,7 @@ static void usage() {
     printf("  --games N         nombre de parties (--play)\n");
     printf("  --seed N          graine aleatoire de depart\n");
     printf("  --ms N            budget de recherche par coup (defaut 150)\n");
-    printf("  --depth N         profondeur max (defaut 11)\n");
+    printf("  --depth N         profondeur max (defaut 13)\n");
     printf("  --threads N       threads de recherche (defaut auto, max utile 4)\n");
     printf("  --port N          port du serveur (defaut 8765)\n");
     printf("  --verbose         affiche le plateau a chaque coup\n");
@@ -1227,7 +1231,7 @@ int main(int argc, char **argv) {
     bool verbose = false;
     uint64_t seed = 2048;
     double ms = 150.0;
-    int cap_depth = 11;
+    int cap_depth = 13;
     int games = 1;
     int port = 8765;
     int threads = 0;
